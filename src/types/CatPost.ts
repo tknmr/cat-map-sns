@@ -10,4 +10,5 @@ export type CatPost = {
   imageUrl: string // 写真URL
   comment: string  // コメント
   createdAt?: string // (任意) 投稿日時
+  imageFile?: File
 }
