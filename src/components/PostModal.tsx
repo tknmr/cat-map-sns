@@ -5,9 +5,10 @@ import type { CatPost } from '../types/CatPost'
 type PostModalProps = {
   onSubmit: (post: CatPost) => void
   onClose: () => void
+  isSubmitting?: boolean
 }
 
-export function PostModal({ onSubmit, onClose }: PostModalProps) {
+export function PostModal({ onSubmit, onClose, isSubmitting = false }: PostModalProps) {
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [comment, setComment] = useState('')
@@ -97,8 +98,14 @@ export function PostModal({ onSubmit, onClose }: PostModalProps) {
         </label>
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button onClick={handleSubmit} style={{ padding: '8px 12px' }}>Submit</button>
-          <button onClick={onClose} style={{ padding: '8px 12px' }}>Close</button>
+          <button
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+            style={{ padding: '8px 12px', opacity: isSubmitting ? 0.6 : 1, cursor: isSubmitting ? 'not-allowed' : 'pointer' }}
+          >
+            {isSubmitting ? '送信中...' : 'Submit'}
+          </button>
+          <button onClick={onClose} disabled={isSubmitting} style={{ padding: '8px 12px' }}>Close</button>
         </div>
       </div>
     </div>

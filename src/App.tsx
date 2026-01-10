@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { dummyPosts } from './data/dummyPosts'
 import type { CatPost } from './types/CatPost'
+import { createCatPost } from './lib/posts'
 
 import { MapView } from './components/MapView'
 import { DetailModal } from './components/DetailModal'
@@ -36,46 +37,58 @@ export default function App() {
   const [isPostModalOpen, setIsPostModalOpen] = useState(false)
 
   /**
-   * 新しい投稿を追加（ローカルのみ）
+   * 投稿中のローディング状態
    */
-  // File -> data URL
-  const fileToDataUrl = (f: File): Promise<string> =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => {
-        if (typeof reader.result === 'string') resolve(reader.result)
-        else reject(new Error('failed to read file as data url'))
-      }
-      reader.onerror = () => reject(reader.error)
-      reader.readAsDataURL(f)
-    })
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
+  /**
+   * 新しい投稿を Supabase に保存
+   */
   const handleSubmitPost = async (post: CatPost) => {
+    if (isSubmitting) return
     console.log('🆕 [App] new post submitted:', post)
-    console.log('🆕 [App] posts before:', posts.length)
 
-    // 受け取った CatPost.imageFile があれば data URL に変換して imageUrl に入れる
-    let imageUrl: string | undefined = undefined
+    // バリデーション
+    if (!post.imageFile) {
+      alert('画像を選択してください')
+      return
+    }
+    if (!post.comment.trim()) {
+      alert('コメントを入力してください')
+      return
+    }
+    if (post.lat === 0 && post.lng === 0) {
+      alert('位置情報を設定してください')
+      return
+    }
+
+    setIsSubmitting(true)
+
     try {
-      if (post.imageFile) {
-        imageUrl = await fileToDataUrl(post.imageFile)
-      }
-    } catch (e) {
-      console.error('failed to convert image file to data url', e)
+      // Supabase に保存
+      const newPost = await createCatPost({
+        lat: post.lat,
+        lng: post.lng,
+        comment: post.comment,
+        imageFile: post.imageFile,
+      })
+
+      console.log('✅ [App] Post created successfully:', newPost)
+
+      // 投稿一覧の先頭に追加（最新順）
+      setPosts(prev => [newPost, ...prev])
+
+      // モーダルを閉じる
+      setIsPostModalOpen(false)
+
+      alert('投稿が完了しました！')
+    } catch (error) {
+      console.error('❌ [App] Failed to create post:', error)
+      const message = error instanceof Error ? error.message : '投稿に失敗しました'
+      alert(`エラー: ${message}`)
+    } finally {
+      setIsSubmitting(false)
     }
-
-    const stored: StoredPost = {
-      ...post,
-      imageUrl: imageUrl ?? '',
-    }
-
-    setPosts(prev => {
-      const next = [...prev, stored]
-      console.log('🆕 [App] posts after:', next.length)
-      return next
-    })
-
-    setIsPostModalOpen(false)
   }
 
   // posts が変わったら localStorage にシリアライズして保存する（imageFile は保存しない）
@@ -130,6 +143,7 @@ export default function App() {
               console.log('❌ [App] close PostModal')
               setIsPostModalOpen(false)
             }}
+            isSubmitting={isSubmitting}
           />
         </>
       )}
