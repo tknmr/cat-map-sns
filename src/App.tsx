@@ -62,23 +62,22 @@ export default function App() {
       alert('コメントを入力してください')
       return
     }
-    if (post.lat === 0 && post.lng === 0) {
-      alert('位置情報を設定してください')
-      return
-    }
+    // NOTE: Temporarily disable location check to allow UI posting tests.
+    // Re-enable this check once coordinate input is implemented.
+    // if (post.lat === 0 && post.lng === 0) {
+    //   alert('位置情報を設定してください')
+    //   return
+    // }
 
     setIsSubmitting(true)
 
     try {
-      // Supabase に保存
-      const newPost = await createCatPost({
-        lat: post.lat,
-        lng: post.lng,
-        comment: post.comment,
-        imageFile: post.imageFile,
-      })
+      // Save the post using the shared helper which handles storage/backends
+      const newPost = await createCatPost({ ...post, imageFile: post.imageFile! })
 
-      console.log('✅ [App] Post created successfully:', newPost)
+      if (!newPost) {
+        throw new Error('投稿の作成に失敗しました')
+      }
 
       // 投稿一覧の先頭に追加（最新順）
       setPosts(prev => [newPost, ...prev])

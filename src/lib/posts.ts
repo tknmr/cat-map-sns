@@ -56,8 +56,25 @@ async function uploadImageToStorage(file: File): Promise<string> {
     type: file.type
   })
 
-  const fileExt = file.name.split('.').pop() || 'jpg'
-  const fileName = `${crypto.randomUUID()}.${fileExt}`
+  const extFromMime = (mime: string): string => {
+    switch (mime) {
+      case 'image/jpeg':
+        return 'jpg'
+      case 'image/png':
+        return 'png'
+      case 'image/webp':
+        return 'webp'
+      default:
+        return 'jpg'
+    }
+  }
+
+  const uuid = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`
+
+  const fileExt = extFromMime(file.type || 'image/jpeg')
+  const fileName = `${uuid}.${fileExt}`
   const filePath = `cats/${fileName}`
 
   const { error: uploadError } = await supabase.storage
@@ -111,8 +128,23 @@ export async function createCatPost(input: CreateCatPostInput): Promise<CatPost>
   if (file.size > MAX_SIZE) {
     throw new Error('画像サイズが大きすぎます（最大3MB）')
   }
-  if (!file.type.startsWith('image/')) {
-    throw new Error('画像ファイルのみアップロードできます')
+  const allowedMimes = new Set(['image/jpeg', 'image/png', 'image/webp'])
+  if (!allowedMimes.has(file.type)) {
+    throw new Error('画像形式は JPEG/PNG/WebP のみ対応しています')
+  }
+
+  // 位置情報のバリデーション
+  if (!Number.isFinite(input.lat) || input.lat < -90 || input.lat > 90) {
+    throw new Error('緯度が不正です（-90〜90）')
+  }
+  if (!Number.isFinite(input.lng) || input.lng < -180 || input.lng > 180) {
+    throw new Error('経度が不正です（-180〜180）')
+  }
+
+  // コメントのバリデーション（最大100文字）
+  const normalizedComment = (input.comment ?? '').trim()
+  if (normalizedComment.length > 100) {
+    throw new Error('コメントは最大100文字までです')
   }
 
   // 1. 画像をアップロード
@@ -123,8 +155,11 @@ export async function createCatPost(input: CreateCatPostInput): Promise<CatPost>
     lat: input.lat,
     lng: input.lng,
     image_url: imageUrl,
-    comment: input.comment,
+    comment: normalizedComment,
   }
+
+  console.log('📝 [posts] insertPayload:', insertPayload)
+
 
   const { data, error } = await supabase
     .from('cat_posts')
