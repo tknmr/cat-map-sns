@@ -1,7 +1,9 @@
 // ...existing code...
 import React, { useEffect, useState } from 'react'
+import './PostModal.css'
 import type { CatPost } from '../types/CatPost'
 
+import placeholderImg from './cat.png'
 type PostModalProps = {
   onSubmit: (post: CatPost) => void
   onClose: () => void
@@ -11,6 +13,7 @@ export function PostModal({ onSubmit, onClose }: PostModalProps) {
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [comment, setComment] = useState('')
+  const [fileError, setFileError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!file) {
@@ -23,7 +26,28 @@ export function PostModal({ onSubmit, onClose }: PostModalProps) {
   }, [file])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFile(e.target.files?.[0] ?? null)
+    const chosen = e.target.files?.[0] ?? null
+    if (!chosen) {
+      setFile(null)
+      setFileError(null)
+      return
+    }
+
+    const MAX_FILE_MB = 5 // 最大ファイルサイズ（MB）
+    const maxBytes = MAX_FILE_MB * 1024 * 1024
+
+    if (chosen.size > maxBytes) {
+      const sizeMb = (chosen.size / (1024 * 1024)).toFixed(2)
+      setFile(null)
+      setFileError(`画像サイズは ${MAX_FILE_MB}MB 以下である必要があります（選択: ${sizeMb}MB）`)
+      // clear the input so user can re-select same file if they want
+      if (e.target) e.target.value = ''
+      return
+    }
+
+    // ok
+    setFileError(null)
+    setFile(chosen)
   }
 
   const handleSubmit = () => {
@@ -42,63 +66,79 @@ export function PostModal({ onSubmit, onClose }: PostModalProps) {
     onSubmit(newPost)
   }
 
+  const MAX_COMMENT = 100
+
+  const handleCommentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    // remove newlines and trim to max length
+    const raw = e.target.value.replace(/\r?\n/g, ' ')
+    setComment(raw.slice(0, MAX_COMMENT))
+  }
+
+  const handleCommentKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter') {
+      // prevent newline
+      e.preventDefault()
+    }
+  }
+
+  const handleCommentPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    e.preventDefault()
+    const text = e.clipboardData.getData('text').replace(/\r?\n/g, ' ')
+    const next = (comment + text).slice(0, MAX_COMMENT)
+    setComment(next)
+  }
+
+  
+
   return (
-    // バックドロップ + 中央のモーダルコンテナで地図の上に表示されるようにする
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 10000,
-      }}
-    >
-      {/* backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background: 'rgba(0,0,0,0.4)',
-        }}
-      />
+    <div className="pm-root">
+      <div className="pm-backdrop" onClick={onClose} />
 
-      {/* modal */}
-      <div
-        role="dialog"
-        aria-modal="true"
-        style={{
-          position: 'relative',
-          background: '#fff',
-          padding: 20,
-          borderRadius: 8,
-          width: '90%',
-          maxWidth: 480,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
-        }}
-      >
-        <h2>New Cat Post</h2>
+      <div className="pm-modal" role="dialog" aria-modal="true">
+        <div className="pm-header">
+          <h2 className="pm-title">New Cat Post</h2>
+          <button className="pm-close" onClick={onClose} aria-label="close">✕</button>
+        </div>
 
-        <label style={{ display: 'block', marginBottom: 12 }}>
-          画像を選択
-          <input type="file" accept="image/*" capture="environment" onChange={handleFileChange} />
+        <label className="pm-label pm-file-label">
+          {preview ? (
+            <span className="pm-file-label-text">
+              <img src={preview} className="pm-file-selected-img" alt="selected" />
+            </span>
+          ) : (
+            <span className="pm-file-label-text">
+              <img 
+                src={placeholderImg} 
+                className="pm-file-illustration" 
+                alt="イラスト" 
+                style={{ width: '64px', height: '64px', objectFit: 'contain' }} 
+              />
+
+
+              <div className="pm-file-caption">画像を選択</div>
+            </span>
+          )}
+          <input className="pm-file-input" type="file" accept="image/*" onChange={handleFileChange} />
         </label>
+  {fileError && <div className="pm-file-error" role="alert">{fileError}</div>}
 
-        {preview && (
-          <div style={{ marginBottom: 12 }}>
-            <img src={preview} alt="preview" style={{ maxWidth: '100%', maxHeight: 300 }} />
+        <div className="pm-media-row">
+          <div className="pm-bubble pm-bubble--with-image">
+            <textarea
+              className="pm-bubble-textarea"
+              value={comment}
+              onChange={handleCommentChange}
+              onKeyDown={handleCommentKeyDown}
+              onPaste={handleCommentPaste}
+              rows={4}
+              placeholder="コメントを入力"
+            />
+            <div className="pm-counter">{comment.length}/{MAX_COMMENT}</div>
           </div>
-        )}
+        </div>
 
-        <label style={{ display: 'block', marginBottom: 12 }}>
-          コメント
-          <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={4} style={{ width: '100%' }} />
-        </label>
-
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button onClick={handleSubmit} style={{ padding: '8px 12px' }}>Submit</button>
-          <button onClick={onClose} style={{ padding: '8px 12px' }}>Close</button>
+        <div className="pm-actions">
+          <button className="pm-btn pm-btn--primary" onClick={handleSubmit} disabled={!file || !!fileError}>投稿</button>
         </div>
       </div>
     </div>
