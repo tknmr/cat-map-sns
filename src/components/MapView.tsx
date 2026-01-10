@@ -1,6 +1,6 @@
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import L from 'leaflet'
 import pinImage from '../assets/pin_neko_360.png'
 import type { CatPost } from '../types/CatPost'
