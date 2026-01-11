@@ -4,7 +4,7 @@ import type { CatPost } from '../types/CatPost'
 import { LocationPicker } from './LocationPicker' // ★追加: パスが合っているか確認してください
 
 // 画像パスは実際の環境に合わせてください
-import placeholderImg from './cat.png'
+import placeholderImg from '../assets/cat.png'
 
 type PostModalProps = {
   onSubmit: (post: CatPost) => void
