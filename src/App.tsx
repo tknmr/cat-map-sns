@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
-import { dummyPosts } from './data/dummyPosts'
 import type { CatPost } from './types/CatPost'
-import { createCatPost } from './lib/posts'
+import { createCatPost, listCatPosts } from './lib/posts'
 
 import { MapView } from './components/MapView'
 import { DetailModal } from './components/DetailModal'
@@ -15,16 +14,9 @@ export default function App() {
   // StoredPost は表示用に imageUrl を持てるローカル表現
   type StoredPost = CatPost & { imageUrl?: string }
 
-  // 初期値は localStorage があればそれを読み、なければダミーを使用
-  const [posts, setPosts] = useState<StoredPost[]>(() => {
-    try {
-      const raw = localStorage.getItem('cat_posts')
-      if (raw) return JSON.parse(raw) as StoredPost[]
-    } catch (e) {
-      console.warn('failed to read posts from localStorage', e)
-    }
-    return dummyPosts as StoredPost[]
-  })
+  const [posts, setPosts] = useState<StoredPost[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
 
   /**
    * 選択中の投稿（ピンクリックで入る）
@@ -45,6 +37,29 @@ export default function App() {
    * 投稿中のローディング状態
    */
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  /**
+   * マウント時にDBから投稿一覧を取得
+   */
+  useEffect(() => {
+    const fetchPosts = async () => {
+      try {
+        setIsLoading(true)
+        setFetchError(null)
+        const data = await listCatPosts()
+        setPosts(data)
+        console.log('✅ [App] Loaded posts from DB:', data.length)
+      } catch (error) {
+        console.error('❌ [App] Failed to fetch posts:', error)
+        const message = error instanceof Error ? error.message : '投稿の取得に失敗しました'
+        setFetchError(message)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchPosts()
+  }, [])
 
   /**
    * 新しい投稿を Supabase に保存
@@ -79,11 +94,12 @@ export default function App() {
         throw new Error('投稿の作成に失敗しました')
       }
 
-      // 投稿一覧の先頭に追加（最新順）
-      setPosts(prev => [newPost, ...prev])
-
       // モーダルを閉じる
       setIsPostModalOpen(false)
+
+      // DBから最新の投稿一覧を再取得して反映
+      const updatedPosts = await listCatPosts()
+      setPosts(updatedPosts)
 
       alert('投稿が完了しました！')
     } catch (error) {
@@ -95,22 +111,23 @@ export default function App() {
     }
   }
 
-  // posts が変わったら localStorage にシリアライズして保存する（imageFile は保存しない）
-  useEffect(() => {
-    try {
-      const serializable = posts.map(p => ({
-        id: p.id,
-        lat: p.lat,
-        lng: p.lng,
-        comment: p.comment,
-        createdAt: p.createdAt,
-        imageUrl: p.imageUrl ?? null,
-      }))
-      localStorage.setItem('cat_posts', JSON.stringify(serializable))
-    } catch (e) {
-      console.warn('failed to save posts to localStorage', e)
-    }
-  }, [posts])
+  // ローディング中またはエラー時の表示
+  if (isLoading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontSize: '1.5rem' }}>
+        読み込み中... 🐾
+      </div>
+    )
+  }
+
+  if (fetchError) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: '1rem' }}>
+        <p style={{ color: 'red', fontSize: '1.2rem' }}>エラー: {fetchError}</p>
+        <button onClick={() => window.location.reload()}>再読み込み</button>
+      </div>
+    )
+  }
 
   return (
     <>
