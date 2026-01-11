@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { CatPost } from './types/CatPost'
 import { createCatPost, listCatPosts } from './lib/posts'
+import { supabase } from './lib/supabase'
 
 import { MapView } from './components/MapView'
 import { DetailModal } from './components/DetailModal'
@@ -62,6 +63,68 @@ export default function App() {
     }
 
     fetchPosts()
+  }, [])
+
+  /**
+   * Supabase Realtime: 新しい投稿をリアルタイムで受信
+   */
+  useEffect(() => {
+    console.log('🔌 [App] Setting up Realtime subscription...')
+
+    const channel = supabase
+      .channel('cat_posts_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'cat_posts'
+        },
+        (payload) => {
+          console.log('🆕 [App] New post received via Realtime:', payload)
+
+          // payload.new contains the inserted row
+          const newRow = payload.new as {
+            id: string
+            lat: number
+            lng: number
+            image_url: string
+            comment: string
+            created_at: string | null
+          }
+
+          // Convert snake_case to camelCase
+          const newPost: CatPost = {
+            id: newRow.id,
+            lat: newRow.lat,
+            lng: newRow.lng,
+            imageUrl: newRow.image_url,
+            comment: newRow.comment,
+            createdAt: newRow.created_at ?? undefined,
+          }
+
+          // Add new post to the beginning of the list (most recent first)
+          setPosts((prevPosts) => {
+            // Check if post already exists (avoid duplicates)
+            const exists = prevPosts.some(p => p.id === newPost.id)
+            if (exists) {
+              console.log('⚠️ [App] Post already exists, skipping duplicate')
+              return prevPosts
+            }
+            console.log('✅ [App] Adding new post to map')
+            return [newPost, ...prevPosts]
+          })
+        }
+      )
+      .subscribe((status) => {
+        console.log('📡 [App] Realtime subscription status:', status)
+      })
+
+    // Cleanup: unsubscribe when component unmounts
+    return () => {
+      console.log('🔌 [App] Cleaning up Realtime subscription')
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   /**
